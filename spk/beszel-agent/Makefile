@@ -1,5 +1,5 @@
 SPK_NAME = beszel-agent
-SPK_VERS = 0.11.1
+SPK_VERS = 0.18.2
 SPK_REV = 1
 SPK_ICON = src/beszel.png
 
@@ -18,7 +18,7 @@ LICENSE  = MIT
 
 STARTABLE = yes
 SERVICE_SETUP = src/service-setup.sh
-SERVICE_PORT = 45876
+SERVICE_PORT = 45876
 NO_SERVICE_SHORTCUT = y
 
 WIZARDS_DIR = src/wizard/
