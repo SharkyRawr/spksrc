@@ -11,7 +11,7 @@ on:
       package:
         description: 'Package to build'
         required: true
-        default: 'adminer'
+        default: 'beszel-agent'
       add_noarch_builds:
         description: 'Include noarch packages'
         required: false
@@ -233,6 +233,7 @@ jobs:
             add_to_matrix "x64-7.2"
             add_to_matrix "aarch64-7.2"
             add_to_matrix "armv7-7.2"
+            add_to_matrix "rtd1296-7.2"
           fi
 
           # Add DSM 7.1 builds
@@ -242,6 +243,7 @@ jobs:
             add_to_matrix "evansport-7.1"
             add_to_matrix "armv7-7.1"
             add_to_matrix "comcerto2k-7.1"
+            add_to_matrix "rtd1296-7.1"
           fi
 
           # Add DSM 6.2 builds
