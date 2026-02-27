@@ -1,6 +1,6 @@
 SPK_NAME = beszel-agent
-SPK_VERS = 0.18.3
-SPK_REV = 1
+SPK_VERS = 0.18.4
+SPK_REV = 2
 SPK_ICON = src/beszel.png
 
 UNSUPPORTED_ARCHS = $(PPC_ARCHS)
@@ -11,7 +11,7 @@ MAINTAINER = hgy59
 DESCRIPTION = "Simple, lightweight server monitoring. This package provides the Beszel Agent only."
 
 DISPLAY_NAME = Beszel Agent
-CHANGELOG = "Initial package release."
+CHANGELOG = "Update to 0.18.4"
 
 HOMEPAGE = https://beszel.dev/
 LICENSE  = MIT
