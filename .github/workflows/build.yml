@@ -35,7 +35,7 @@ on:
       add_dsm62_builds:
         description: 'Include DSM 6.2 archs'
         required: false
-        default: true
+        default: false
         type: boolean
       add_dsm52_builds:
         description: 'Include DSM 5.2 archs'
