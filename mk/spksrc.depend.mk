@@ -9,7 +9,6 @@
 #  DEPENDS             List of dependencies to go through
 #  REQUIRE_KERNEL      If set, will compile kernel modules and allow
 #                      use of KERNEL_DIR
-#  REQUIRE_TOOLKIT     If set, will download and extract matching toolkit
 #  BUILD_DEPENDS       List of dependencies to go through, PLIST is ignored
 
 ### For managing kernel modules dependent builds
@@ -33,12 +32,6 @@ else
 $(POST_DEPEND_TARGET): $(DEPEND_TARGET)
 endif
 
-ifeq ($(strip $(REQUIRE_TOOLKIT)),)
-TOOLKIT_DEPEND = 
-else
-TOOLKIT_DEPEND = toolkit/syno-$(ARCH)-$(TCVERSION)
-endif
-
 native-depend_msg_target:
 	@$(MSG) "Processing NATIVE dependencies of $(NAME)"
 
@@ -53,7 +46,7 @@ native-depend: native-depend_msg_target
 	@set -e; \
 	for depend in $(NATIVE_DEPENDS); \
 	do                          \
-	  env $(ENV) WORK_DIR=$(WORK_DIR) $(MAKE) -C ../../$$depend ; \
+	  env $(ENV) WORK_DIR=$(WORK_DIR) INSTALL_PREFIX=$(INSTALL_PREFIX) $(MAKE) -C ../../$$depend ; \
 	done
 	@set -e; \
 	for depend in $(filter-out native/%,$(BUILD_DEPENDS) $(OPTIONAL_DEPENDS) $(DEPENDS)); \
@@ -84,7 +77,7 @@ endif
 	  env $(ENV) WORK_DIR=$(WORK_DIR) $(MAKE) -C ../../$$depend ; \
 	done
 	@set -e; \
-	for depend in $(filter-out native/%,$(TOOLKIT_DEPEND) $(BUILD_DEPENDS) $(DEPENDS)); \
+	for depend in $(filter-out native/%,$(BUILD_DEPENDS) $(DEPENDS)); \
 	do                          \
 	  env $(ENV) $(MAKE) -C ../../$$depend ; \
 	done
