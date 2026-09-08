@@ -33,6 +33,11 @@ export_variables_from_file ()
 
 export_variables_from_file "${ENV_FILE}"
 
+# Older packages stored the Hub public key separately.
+if [ -z "${KEY}" ] && [ -z "${KEY_FILE}" ] && [ -r "${SYNOPKG_PKGVAR}/key.pub" ]; then
+    export KEY_FILE="${SYNOPKG_PKGVAR}/key.pub"
+fi
+
 BESZEL_AGENT="${SYNOPKG_PKGDEST}/bin/beszel-agent"
 SERVICE_COMMAND="${BESZEL_AGENT}"
 
