@@ -39,6 +39,22 @@ SERVICE_COMMAND="${BESZEL_AGENT}"
 SVC_BACKGROUND=y
 SVC_WRITE_PID=y
 
+service_save ()
+{
+    if [ -f "${ENV_FILE}" ]; then
+        mkdir -p "${TMP_DIR}"
+        cp -p "${ENV_FILE}" "${TMP_DIR}/environment.txt"
+    fi
+}
+
+service_restore ()
+{
+    if [ ! -e "${ENV_FILE}" ] && [ -f "${TMP_DIR}/environment.txt" ]; then
+        mkdir -p "${SYNOPKG_PKGVAR}"
+        cp -p "${TMP_DIR}/environment.txt" "${ENV_FILE}"
+    fi
+}
+
 service_postinst ()
 {
     if [ "${SYNOPKG_PKG_STATUS}" == "INSTALL" ]; then
