@@ -48,7 +48,7 @@ endif
 # underneath -- a gcc8 overlay, say, adds gfortran to a 6.2.4 arch the list calls
 # Fortran-less. Probing the actual binary stays correct whatever provides it.
 #
-# Lazy on purpose, exactly like TC_HAS_LIBATOMIC below: the ifneq's that read it
+# Lazy on purpose, like TC_HAS_LIBATOMIC: the ifneq's that read it
 # force the wildcard, and it only needs to be right where it is consumed -- the
 # tc_vars sub-make, which re-parses this file after the toolchain is extracted, so
 # the binary is there to find. Cross packages read the baked tc_vars result and
@@ -56,20 +56,14 @@ endif
 # consumed -- the sub-make's is.)
 TC_HAS_FORTRAN = $(if $(wildcard $(TC_WORK_DIR)/$(TC_TARGET)/bin/$(TC_PREFIX)gfortran),1)
 
+# The tools a binutils overlay provides, so tc_vars.mk can take those from it when one is
+# active. A future gcc overlay gets its own TC_GCC_TOOLS list the same way.
+TC_BINUTILS_TOOLS = ld as ar nm ranlib strip objdump objcopy readelf
+
 TOOLS = ld ldshared:"gcc -shared" cpp nm cc:gcc as ranlib cxx:g++ ar strip objdump objcopy readelf
 ifneq ($(strip $(TC_HAS_FORTRAN)),)
 TOOLS += fc:gfortran
 endif
-
-# Does this toolchain's gcc ship libatomic? Ask it, rather than tabulate.
-#
-# A target without native 64-bit atomics (ARMv5, PowerPC e500v2) makes gcc emit
-# calls into libatomic, which the link then has to resolve. But the library only
-# ships from gcc 4.7 on, and handing -latomic to an older gcc is fatal ("cannot
-# find -latomic"). Availability is the exact criterion, not a proxy: a gcc old
-# enough to lack libatomic also predates the __atomic_* builtins, emits __sync_*
-# instead, and so never needs the library. One question answers both.
-TC_HAS_LIBATOMIC = $(if $(filter /%,$(shell $(TC_WORK_DIR)/$(TC_TARGET)/bin/$(TC_PREFIX)gcc -print-file-name=libatomic.so 2>/dev/null)),1)
 
 # TC_EXTRA_LDFLAGS carries the ABI to the link and adds what a toolchain declares
 # for the linker. The ABI (TC_EXTRA_BUILD_FLAGS -- the -march/-mcpu/... flags folded
@@ -79,19 +73,32 @@ TC_HAS_LIBATOMIC = $(if $(filter /%,$(shell $(TC_WORK_DIR)/$(TC_TARGET)/bin/$(TC
 # both previously carried as per-package arch lists (cups/flac). -latomic is dropped
 # where the gcc does not ship it -- a gcc that old predates the __atomic_* builtins
 # and emits __sync_* instead, so it never needs the library. Kept lazy via a captured
-# copy: TC_HAS_LIBATOMIC (just above) runs the compiler, not extracted yet while the
+# copy: TC_HAS_LIBATOMIC runs the compiler, not extracted yet while the
 # toolchain is being parsed.
 #
-# These libs are declared toolchain-wide now, not per package, so they would land on
-# every link -- yet most binaries call neither clock_gettime nor an atomic builtin.
-# Wrap them in -Wl,--as-needed so the linker records a librt/libatomic dependency
-# only where the objects actually reference a symbol it provides, and -Wl,--no-as-needed
-# restores the default right after: the policy change is scoped to these two libs and
-# never drops a package library kept only for its side effects.
-_tc_comma := ,
+# These libs are declared toolchain-wide, not per package, so they land on every link --
+# yet most binaries call neither clock_gettime nor an atomic builtin. They used to be
+# wrapped in -Wl,--as-needed ... -Wl,--no-as-needed to record a librt/libatomic
+# dependency only where the objects reference one.
+#
+# That cannot work from here. LDFLAGS precedes the objects on every link line, and
+# --as-needed keeps a library only if it resolves a symbol that is ALREADY undefined
+# where the linker sees it. At the front of the line no object has been read yet, so
+# nothing is undefined and the libraries are always discarded -- measured identical to
+# passing nothing at all:
+#
+#   -Wl,--as-needed -lrt -Wl,--no-as-needed  ... -lsrt   undefined reference to clock_gettime
+#   (nothing)                                ... -lsrt   undefined reference to clock_gettime
+#   -lrt                                     ... -lsrt   links, DT_NEEDED librt
+#
+# So the bracket is dropped and the libraries are linked outright. The cost is a
+# DT_NEEDED that may go unused on the archs whose toolchain declares one; both librt and
+# libatomic ship with the glibc already on the device, so an unused entry costs a mapping
+# and nothing else -- against a link that fails outright, or a package carrying its own
+# workaround to put the library back.
 _TC_EXTRA_LDFLAGS := $(TC_EXTRA_LDFLAGS)
 _tc_ld_syslibs = $(if $(TC_HAS_LIBATOMIC),$(_TC_EXTRA_LDFLAGS),$(filter-out -latomic,$(_TC_EXTRA_LDFLAGS)))
-TC_EXTRA_LDFLAGS = $(TC_EXTRA_BUILD_FLAGS) $(if $(strip $(_tc_ld_syslibs)),-Wl$(_tc_comma)--as-needed $(_tc_ld_syslibs) -Wl$(_tc_comma)--no-as-needed)
+TC_EXTRA_LDFLAGS = $(TC_EXTRA_BUILD_FLAGS) $(_tc_ld_syslibs)
 
 # TC_EXTRA_BUILD_FLAGS holds the target's ABI/arch flags (-march, -mcpu, -mfpu,
 # -mfloat-abi, -mthumb, ...). They select the ABI, so they must reach every language

@@ -14,6 +14,7 @@
 #  REQUIRE_KERNEL      If set, will compile kernel modules and allow
 #                      use of KERNEL_DIR
 #  BUILD_DEPENDS       List of dependencies to go through, PLIST is ignored
+#  NATIVE_DEPENDS      native/* to build INTO this package's own context
 #
 ###############################################################################
 
@@ -58,6 +59,9 @@ native-depend: native-depend_msg_target
 # the consumer's INSTALL_PREFIX/exports don't leak into it, and is skipped when
 # its install staging already exists (re-running arch- on a built package is
 # not idempotent at the packaging step). No-op when BUILD_DEPENDS has no spk/*.
+#
+# FWRD_ARGS crosses that isolation on purpose: those are decisions about the whole run,
+# and a meta that disagrees links a libdrm the consumer then cannot resolve.
 .PHONY: spk-meta-source
 spk-meta-source:
 	@set -e; \
@@ -67,7 +71,7 @@ spk-meta-source:
 	   else \
 	      $(MSG) "Stage1: building meta source $$metasrc for $(ARCH)-$(TCVERSION)" ; \
 	      env -i PATH="$(PATH)" HOME="$(HOME)" \
-	         $(MAKE) --no-print-directory -C ../../$$metasrc arch-$(ARCH)-$(TCVERSION) ; \
+	         $(MAKE) $(FWRD_ARGS) --no-print-directory -C ../../$$metasrc arch-$(ARCH)-$(TCVERSION) ; \
 	   fi ; \
 	done
 

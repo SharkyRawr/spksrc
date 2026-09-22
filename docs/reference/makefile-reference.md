@@ -47,7 +47,7 @@ This is a comprehensive reference for all Makefile variables and targets in spks
 
 | Variable | Description | Example |
 |----------|-------------|--------|
-| `DEPENDS` | Cross packages to build and include | `cross/curl cross/openssl` |
+| `DEPENDS` | Cross packages to build and include | `cross/curl cross/openssl3` |
 | `BUILD_DEPENDS` | Packages needed only during build | `native/cmake` |
 | `NATIVE_DEPENDS` | Native tools for build host | `native/ninja` |
 | `SPK_DEPENDS` | SPK packages required at runtime | `"WebStation>=3.0"` |
@@ -110,6 +110,8 @@ This is a comprehensive reference for all Makefile variables and targets in spks
 | `PRE_COMPILE_TARGET` | Target to run before compile |
 | `POST_COMPILE_TARGET` | Target to run after compile |
 | `DISABLE_PARALLEL_MAKE` | Set to 1 to disable parallel build |
+| `PATCHES` | Additional patch files to apply (in addition to the auto-discovered `patches/` ones) |
+| `PATCHES_LEVEL` | Patch level for `patch -p<level>` (default `0`; see [Patches](../developer-guide/packaging/patches.md)) |
 
 ### Installation
 
@@ -221,6 +223,7 @@ Available after toolchain is loaded:
 | `TC_GCC` | gcc version the current toolchain ships (read-only, from its Makefile) |
 | `TC_GLIBC` | glibc version the current toolchain targets (read-only) |
 | `TC_KERNEL` | Kernel version the current toolchain targets (read-only) |
+| `TC_RUSTC` | rustc version the current toolchain pins, or `stable` (read-only) |
 | `UNSUPPORTED_ARCHS` | Architectures/platforms to exclude from this package |
 | `UNSUPPORTED_ARCHS_TCVERSION` | Architecture/DSM-version pairs to exclude |
 
@@ -232,6 +235,7 @@ The architecture **groups** (`x64_ARCHS`, `ARMv7_ARCHS`, `ARMv8_ARCHS`, `ARM_ARC
 |----------|-------------|
 | `MIN_GCC_VERSION` | Refuse archs whose toolchain gcc is below this (capability floor) |
 | `MIN_GLIBC_VERSION` | Refuse archs whose toolchain glibc is below this (runtime floor) |
+| `MIN_RUSTC_VERSION` | Refuse archs whose toolchain rustc is below this (capability floor) |
 | `REQUIRE_64BIT` | Set to `1` to refuse 32-bit architectures |
 | `REQUIRED_MIN_DSM` | Skip if the DSM toolchain is below this version |
 | `REQUIRED_MAX_DSM` | Skip if the DSM toolchain is above this version |
@@ -303,6 +307,7 @@ make all-supported
 | `PARALLEL_MAKE` | Parallel build mode (nop, max, N) |
 | `NCPUS` | Number of CPUs for parallel builds |
 | `V` | Verbose output when set to 1 |
+| `VIDEODRV` | Set to 0 to build without the `synocli-videodriver` meta and the hardware acceleration it provides (default `1`; only an explicit `0`/`off` leaves it out. `make setup` writes it commented into `local.mk`, and automatic CI runs set it) |
 
 ### Proxy Configuration
 
@@ -325,6 +330,9 @@ PARALLEL_MAKE = max
 
 # Per-compile timing statistics
 PSTAT = 1
+
+# Build without the synocli-videodriver meta and the hardware acceleration it feeds
+VIDEODRV ?= 0
 
 # Skip GitHub maintainer API lookups (e.g. offline builds)
 DISABLE_GITHUB_MAINTAINER = 1

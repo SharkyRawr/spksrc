@@ -169,6 +169,7 @@ jobs:
       has_noarch_min_dsm72_packages: ${{ steps.dependencies.outputs.has_noarch_min_dsm72_packages }}
       has_arch_min_dsm73_packages: ${{ steps.dependencies.outputs.has_arch_min_dsm73_packages }}
       has_noarch_min_dsm73_packages: ${{ steps.dependencies.outputs.has_noarch_min_dsm73_packages }}
+      videodriver: ${{ steps.dependencies.outputs.videodriver }}
       distrib_hash: ${{ steps.distrib-hash.outputs.hash }}
     steps:
       - name: Checkout repository
@@ -181,6 +182,7 @@ jobs:
         id: dependencies
         run: ./.github/actions/prepare.sh
         env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           USER_SPK_TO_BUILD: beszel-agent
 
       - name: Restore distrib cache
@@ -533,6 +535,7 @@ jobs:
           NOARCH_MIN_DSM72_PACKAGES: ${{ needs.prepare.outputs.noarch_min_dsm72_packages }}
           ARCH_MIN_DSM73_PACKAGES: ${{ needs.prepare.outputs.arch_min_dsm73_packages }}
           NOARCH_MIN_DSM73_PACKAGES: ${{ needs.prepare.outputs.noarch_min_dsm73_packages }}
+          VIDEODRV: ${{ needs.prepare.outputs.videodriver }}
           PUBLISH: ${{ github.event.inputs.publish }}
           API_KEY: ${{ secrets.PUBLISH_API_KEY }}
           PACKAGE_TO_PUBLISH: beszel-agent

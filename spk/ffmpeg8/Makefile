@@ -1,15 +1,16 @@
 SPK_NAME = ffmpeg8
 SPK_VERS = 8.1.2
 SKG_MINOR_VERS = $(firstword $(subst ., ,$(SPK_VERS)))
-SPK_REV = 3
+SPK_REV = 4
 SPK_ICON = src/ffmpeg8.png
-CHANGELOG = "1. Restore the SYNO-videostation patches"
+CHANGELOG  = "1. Restore the SYNO-videostation patches<br/>"
+CHANGELOG += "2. Internal build options now follow toolchain capabilities<br/>"
+CHANGELOG += "3. Update to jellyfin 8.1.2-5 patchset"
 
 DEPENDS = cross/ffmpeg8
 VIDEODRV_PACKAGE = synocli-videodriver
 
 # Needs C11 and working atomics -- gcc 4.9 or newer
-MIN_GCC_VERSION = 4.9
 
 MAINTAINER = th0ma7
 DESCRIPTION = FFmpeg is a complete, cross-platform solution to record, convert and stream audio and video. It includes libavcodec - the leading audio/video codec library.  More information from SynoCommunity FFmpeg package available at https://docs.synocommunity.com/packages/ffmpeg/

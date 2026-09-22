@@ -49,23 +49,64 @@ ifneq ($(ARCH),)
 ARCH_SUFFIX = -$(ARCH)-$(TCVERSION)
 endif
 
+# Utility variables
+empty :=
+space := $(empty) $(empty)
+# For literal ',' in $(eval ...) contexts interpreted as individual arguments -> $(eval -Wl$(,)--rpath-link$(,)/some/path)
+, := ,
+
+# Ahead of every include below, not further down the file: an included makefile that uses
+# these in a `:=` assignment expands them at its own parse, and would otherwise get empty.
 # Load macros early
 include $(BASEDIR)/mk/spksrc.common/macros.mk
 
 # Common directories (must be set after ARCH_SUFFIX)
 include $(BASEDIR)/mk/spksrc.common/directories.mk
 
-# Setup minimal toolchain environment variables
+# Load local configuration
+LOCAL_CONFIG_MK = $(BASEDIR)/local.mk
+-include $(LOCAL_CONFIG_MK)
+
+# Hardware video acceleration comes from the synocli-videodriver meta. AFTER local.mk for
+# the same reason as the overlay switches, and read like them -- except that only an
+# explicit 0/off leaves the meta out, so an unexpected value builds rather than silently
+# publishing an ffmpeg with no acceleration and no error to show for it.
+VIDEODRV    ?= 1
+VIDEODRV_ON  = $(if $(filter 0 off OFF,$(strip $(VIDEODRV))),,1)
+
+# Carried to every crossing: a meta that disagrees links a libdrm its consumer cannot
+# resolve, which is the same class of hazard as an overlay's ABI.
+FWRD_VARS += VIDEODRV
+
+### Overlay decisions -- AFTER local.mk: both use ?=, so the first read wins and that has
+### to be local.mk. Chain: command line > environment > local.mk > these defaults.
+include $(BASEDIR)/mk/spksrc.common/overlay.mk
+
+# The switches named above, as command-line variables. Here and not lower down: stage0's
+# $(shell) below is the first crossing to read them.
+FWRD_ARGS = $(foreach v,$(sort $(FWRD_VARS)),$(v)='$($(v))')
+
+# One asks for debug symbols, the other strips them. env-default.mk lets the first win by
+# if/else, while cmake, ninja and install test the second on its own and still strip.
+ifneq ($(and $(filter 1,$(strip $(GCC_DEBUG_INFO))),$(filter 1,$(strip $(GCC_NO_DEBUG_INFO)))),)
+$(error GCC_DEBUG_INFO and GCC_NO_DEBUG_INFO are mutually exclusive -- set one or neither)
+endif
+
+# Setup minimal toolchain environment variables -- AFTER overlay.mk and FWRD_ARGS above,
+# so the tc_vars.mk stage0 writes already carries this build's switches.
 include $(BASEDIR)/mk/spksrc.common/stage0.mk
 
 # Load common definitions
 include $(BASEDIR)/mk/spksrc.common/archs.mk
-include $(BASEDIR)/mk/spksrc.common/tc-capability.mk
+
+# Which archs a dotnet package refuses (needs the arch groups above)
+include $(BASEDIR)/mk/spksrc.common/dotnet.mk
+
 include $(BASEDIR)/mk/spksrc.common/logs.mk
 
-# Load local configuration
-LOCAL_CONFIG_MK = $(BASEDIR)/local.mk
--include $(LOCAL_CONFIG_MK)
+### Toolchain capabilities -- AFTER overlay.mk: TC_RUSTC depends on whether the rust
+### overlay is active, and the MIN_RUSTC_VERSION floor has to agree with it.
+include $(BASEDIR)/mk/spksrc.common/tc-capability.mk
 
 ###
 
@@ -89,12 +130,6 @@ RUN = cd $(WORK_DIR)/$(PKG_DIR) && env $(ENV)
 
 # Display message in a consistent way
 MSG = echo "===> "
-
-# Utility variables
-empty :=
-space := $(empty) $(empty)
-# For literal ',' in $(eval ...) contexts interpreted as individual arguments -> $(eval -Wl$(,)--rpath-link$(,)/some/path)
-, := ,
 
 # Available languages
 LANGUAGES = chs cht csy dan enu fre ger hun ita jpn krn nld nor plk ptb ptg rus spn sve trk

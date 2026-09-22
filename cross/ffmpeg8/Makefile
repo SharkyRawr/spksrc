@@ -15,16 +15,37 @@ MIN_GCC_VERSION = 4.9
 
 include ../../mk/spksrc.common.mk
 
-CONFIGURE_ARGS  = --target-os=linux --cross-prefix=$(TC_PATH)$(TC_PREFIX) --prefix=$(INSTALL_PREFIX)
+CONFIGURE_ARGS  = --target-os=linux --prefix=$(INSTALL_PREFIX)
+
+# Every tool named, rather than derived from --cross-prefix, so each follows whichever
+# overlay provides it. as, ld and dep_cc come from cc; --pkg-config is set below.
+CONFIGURE_ARGS += --enable-cross-compile
+CONFIGURE_ARGS += --cc=$(call tc,gcc)
+CONFIGURE_ARGS += --cxx=$(call tc,g++)
+CONFIGURE_ARGS += --ar=$(call tc,ar)
+CONFIGURE_ARGS += --nm=$(call tc,nm)
+CONFIGURE_ARGS += --ranlib=$(call tc,ranlib)
+CONFIGURE_ARGS += --strip=$(call tc,strip)
+
+# The v4l2 input device needs the multiplanar API, which Linux grew in 3.2; the 2.6.32
+# toolchains ship no such header. Was disabled for qoriq by name.
+ifeq ($(call version_lt,$(TC_KERNEL),3.2),1)
+CONFIGURE_ARGS += --disable-indev=v4l2
+endif
 CONFIGURE_ARGS += --pkg-config=/usr/bin/pkg-config
-CONFIGURE_ARGS += --ranlib=$(RANLIB)
-CONFIGURE_ARGS += --enable-cross-compile --enable-rpath --enable-pic
+CONFIGURE_ARGS += --enable-rpath
+CONFIGURE_ARGS += --enable-pic
 CONFIGURE_ARGS += --enable-shared
-CONFIGURE_ARGS += --enable-gpl --enable-version3
+CONFIGURE_ARGS += --enable-gpl
+CONFIGURE_ARGS += --enable-version3
 CONFIGURE_ARGS += --disable-static
 CONFIGURE_ARGS += --disable-doc
 ifeq ($(strip $(GCC_DEBUG_INFO)),1)
-  CONFIGURE_ARGS += --enable-debug=3 --disable-stripping --assert-level=2 --enable-ftrapv --disable-optimizations
+  CONFIGURE_ARGS += --enable-debug=3
+  CONFIGURE_ARGS += --disable-stripping
+  CONFIGURE_ARGS += --assert-level=2
+  CONFIGURE_ARGS += --enable-ftrapv
+  CONFIGURE_ARGS += --disable-optimizations
 else
   CONFIGURE_ARGS += --extra-cflags=-O3
   CONFIGURE_ARGS += --disable-debug
@@ -124,7 +145,8 @@ CONFIGURE_ARGS += --enable-liblc3
 endif
 
 DEPENDS += cross/opencore-amr
-CONFIGURE_ARGS += --enable-libopencore-amrnb --enable-libopencore-amrwb
+CONFIGURE_ARGS += --enable-libopencore-amrnb
+CONFIGURE_ARGS += --enable-libopencore-amrwb
 
 DEPENDS += cross/openjpeg
 CONFIGURE_ARGS += --enable-libopenjpeg
@@ -191,7 +213,8 @@ DEPENDS += cross/x265
 CONFIGURE_ARGS += --enable-libx265
 
 DEPENDS += cross/libxml2
-CONFIGURE_ARGS += --enable-libxml2 --enable-demuxer=dash
+CONFIGURE_ARGS += --enable-libxml2
+CONFIGURE_ARGS += --enable-demuxer=dash
 
 DEPENDS += cross/libzimg
 CONFIGURE_ARGS += --enable-libzimg
@@ -211,7 +234,8 @@ CONFIGURE_ARGS += --enable-libzvbi
 # See also: http://wiki.hydrogenaud.io/index.php?title=Fraunhofer_FDK_AAC#FDK_License
 #
 DEPENDS += cross/fdk-aac
-CONFIGURE_ARGS += --enable-libfdk-aac --enable-nonfree
+CONFIGURE_ARGS += --enable-libfdk-aac
+CONFIGURE_ARGS += --enable-nonfree
 
 ##
 ## ARCH SPECIFIC
@@ -249,17 +273,20 @@ endif
 ifeq ($(findstring $(ARCH),$(ARMv8_ARCHS)),$(ARCH))
 CONFIGURE_ARGS += --arch=arm64
 CONFIGURE_ARGS += --enable-neon
+# libdrm comes from the videodriver meta
+ifneq ($(VIDEODRV_ON),)
 CONFIGURE_ARGS += --enable-libdrm
+endif
 CONFIGURE_ARGS += --enable-thumb
 CONFIGURE_ARGS += --enable-v4l2-m2m
 endif
 
-ifeq ($(findstring $(ARCH),qoriq),$(ARCH))
+# Every PowerPC toolchain here is e500v2 -- ppc853x and qoriq both declare -mcpu=8548 --
+# and only qoriq was ever listed.
+ifeq ($(findstring $(ARCH),$(PPC_ARCHS)),$(ARCH))
 CONFIGURE_ARGS += --arch=ppc
 CONFIGURE_ARGS += --cpu=e500v2
 CONFIGURE_ARGS += --extra-libs=-latomic
-# ffmpeg-7.1 video4linux2 is no longer compatible
-CONFIGURE_ARGS += --disable-indev=v4l2
 endif
 
 ifeq ($(findstring $(ARCH),evansport),$(ARCH))
@@ -269,11 +296,17 @@ endif
 
 ifeq ($(findstring $(ARCH),$(x64_ARCHS)),$(ARCH))
 CONFIGURE_ARGS += --arch=x86_64
-CONFIGURE_ARGS += --enable-libdrm
-CONFIGURE_ARGS += --enable-vaapi
 ifeq ($(call version_gt, $(TC_GCC), 5),1)
 CONFIGURE_ARGS += --enable-v4l2-m2m
 endif
+
+ifeq ($(call version_ge, $(TCVERSION), 6),1)
+
+# libdrm, libva, MediaSDK and the OpenCL/Vulkan set below all come from the videodriver
+# meta; asking for them where it does not exist stops configure at "libmfx not found".
+ifneq ($(VIDEODRV_ON),)
+CONFIGURE_ARGS += --enable-libdrm
+CONFIGURE_ARGS += --enable-vaapi
 
 # libmfx and libvpl cannot be enabled together:
 #   - libmfx (Intel MediaSDK) → Gen6 to Gen11, legacy, maintenance only
@@ -295,6 +328,8 @@ DEPENDS += cross/libplacebo
 CONFIGURE_ARGS += --enable-libplacebo
 endif
 
+endif # ifneq VIDEODRV_ON
+endif # ifeq TCVERSION >= 6
 endif # ifeq x64_ARCHS
 
 include ../../mk/spksrc.cross-cc.mk

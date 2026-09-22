@@ -29,7 +29,16 @@
 ###############################################################################
 
 # Available toolchains formatted as '{ARCH}-{TC}'
-AVAILABLE_TOOLCHAINS = $(subst syno-,,$(filter-out %-rust,$(sort $(notdir $(wildcard $(BASEDIR)/toolchain/syno-*)))))
+#
+# A toolchain OVERLAY CONSUMER (syno-<arch>-<dsm>_<component>-<vers>) lives beside the
+# base toolchains but is not one: it installs a compiler component, and nothing can be
+# built "for" it. It is told apart by the '_' in its name, which no base toolchain has --
+# the same rule the consumer generators use. The '%-rust' filter this replaces was
+# written for an earlier naming and matches none of the current directories, so every
+# consumer was reaching SUPPORTED_ARCHS and 'make all-supported' was emitting a
+# supported-arch-<consumer-dir> target for each.
+_AVAILABLE_TC_DIRS = $(sort $(notdir $(wildcard $(BASEDIR)/toolchain/syno-*)))
+AVAILABLE_TOOLCHAINS = $(subst syno-,,$(foreach d,$(_AVAILABLE_TC_DIRS),$(if $(findstring _,$(d)),,$(d))))
 AVAILABLE_TCVERSIONS = $(sort $(foreach arch,$(AVAILABLE_TOOLCHAINS),$(shell echo ${arch} | cut -f2 -d'-')))
 
 # Available toolchains formatted as '{ARCH}-{TC}'
@@ -68,7 +77,7 @@ ARM_ARCHS = $(ARMv5_ARCHS) $(ARMv7_ARCHS) $(ARMv7L_ARCHS) $(ARMv8_ARCHS)
 PPC_ARCHS = powerpc ppc824x ppc853x ppc854x qoriq
 
 i686_ARCHS = evansport
-x64_ARCHS = $(GENERIC_x64_ARCH) apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton dockerx64 epyc7002 geminilake geminilakenk grantley purley kvmx64 v1000 v1000nk r1000 r1000nk x86 x86_64
+x64_ARCHS = $(GENERIC_x64_ARCH) apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton dockerx64 epyc7002 epyc7003 epyc7003ntb geminilake geminilakenk grantley purley kvmx64 v1000 v1000nk r1000 r1000nk x86 x86_64
 
 32bit_ARCHS = $(ARMv5_ARCHS) $(ARMv7_ARCHS) $(ARMv7L_ARCHS) $(i686_ARCHS) $(PPC_ARCHS)
 64bit_ARCHS = $(ARMv8_ARCHS) $(x64_ARCHS)
@@ -81,31 +90,6 @@ OLD_PPC_ARCHS = powerpc ppc824x ppc853x ppc854x
 
 # outdated unsupported archs
 DEPRECATED_ARCHS = powerpc ppc824x ppc854x ppc853x
-
-# Notes for .NET 6 compatibility:
-# 1. dotnet for x86 (32-bit) is unsupported on linux and must be built from source
-# 2. ARMv7_ARCHS without full vfpv3 support (having only vfpv3-d16) are not supported
-# 3. SRM ARMv7 archs are not supported
-# 4. Certain combinations of ARMv7 and DSM are incompatible (issues #4790, #5089, #5302, #5315)
-# 5. Comprehensive ARMv7 testing conducted under issue #5574 resulted in the following exclusions
-
-# Exclusions for dotnet core apps
-ifeq ($(strip $(DOTNET_CORE_ARCHS)),1)
-    UNSUPPORTED_ARCHS = $(PPC_ARCHS) $(ARMv5_ARCHS) $(ARMv7L_ARCHS) $(i686_ARCHS) armada370 alpine comcerto2k
-    UNSUPPORTED_ARCHS_TCVERSION = armv7-6.2.4 armv7-1.2 armv7-1.3
-endif
-
-# Exclusions for dotnet 6.0 servarr apps (except x86)
-ifeq ($(strip $(DOTNET_SERVARR_ARCHS)),1)
-    UNSUPPORTED_ARCHS = $(PPC_ARCHS) $(ARMv5_ARCHS) $(ARMv7L_ARCHS) armada370 alpine comcerto2k
-    UNSUPPORTED_ARCHS_TCVERSION = armv7-6.2.4 armv7-1.2 armv7-1.3
-endif
-
-# Exclusions for dotnet 6.0 servarr apps (except x86)
-# ARMv7 incompatibility — see: https://github.com/dotnet/runtime/issues/109739
-ifeq ($(strip $(DOTNET_SERVARR_ARCHS)),2)
-    UNSUPPORTED_ARCHS = $(PPC_ARCHS) $(ARMv5_ARCHS) $(ARMv7L_ARCHS) $(ARMv7_ARCHS)
-endif
 
 # Filter to exclude TC versions greater than DEFAULT_TC (from local configuration)
 TCVERSION_DUPES = $(addprefix %,$(filter-out $(DEFAULT_TC),$(AVAILABLE_TCVERSIONS)))

@@ -6,7 +6,12 @@
 #
 #   MIN_GLIBC_VERSION = 2.20    needs glibc 2.20 or newer
 #   MIN_GCC_VERSION   = 8       needs gcc 8 or newer
+#   MIN_RUSTC_VERSION = 1.85    needs rustc 1.85 or newer
 #   REQUIRE_64BIT     = 1       needs a 64-bit target
+#
+# A floor REFUSES the arch. Where a package must instead CHOOSE between versions of
+# itself -- the cross/<pkg> virtuals -- compare TC_GCC / TC_GLIBC / TC_KERNEL / TC_RUSTC
+# with version_ge directly.
 #
 # This replaces "UNSUPPORTED_ARCHS = <list>" for capability reasons. A hardcoded
 # list says WHERE a package fails, not WHY; it has to be rechecked by hand every
@@ -21,6 +26,11 @@
 # turns that into the arch-refusal error, next to UNSUPPORTED_ARCHS.
 ###############################################################################
 
+# Does this toolchain's gcc ship libatomic? Ask it -- a gcc too old to have it also predates
+# __atomic_* and never needs it. Lazy (=), outside the ARCH guard: it runs the cross gcc.
+TC_HAS_LIBATOMIC = $(if $(filter /%,$(shell $(TC_WORK_DIR)/$(TC_TARGET)/bin/$(TC_PREFIX)gcc -print-file-name=libatomic.so 2>/dev/null)),1)
+
+# Outside the guard on purpose: the native producers read TC_HAS_LIBATOMIC with no ARCH.
 ifneq ($(strip $(ARCH))$(strip $(TCVERSION)),)
 
 _TC_CAP_MK := $(BASEDIR)/toolchain/syno-$(ARCH)-$(TCVERSION)/Makefile
@@ -35,16 +45,13 @@ TC_KERNEL := $(shell sed -n 's/^TC_KERNEL *= *//p' $(_TC_CAP_MK) 2>/dev/null)
 # Reasons accumulate rather than overwrite: an arch can miss more than one
 # capability at once -- a 32-bit target on an old gcc fails REQUIRE_64BIT and
 # MIN_GCC_VERSION together -- and reporting only the last is misleading. They are
-# joined with ", "; the messages carry no comma of their own. _tc_cap_comma exists
-# because a bare comma is an argument separator inside the $(if) that adds the
-# separator only from the second reason on.
+# joined by comma_append (spksrc.common/macros.mk); the messages carry no comma of their
+# own, which a $(call) argument would split on.
 #
 # Reset first: this file is included more than once per build (via spksrc.common.mk),
 # and appending is not idempotent the way the old overwrite was -- without this the
 # same reasons would pile up on every re-parse.
 TC_CAPABILITY_UNSUPPORTED :=
-_tc_cap_comma := ,
-_tc_cap_join    = $(if $(strip $(TC_CAPABILITY_UNSUPPORTED)),$(_tc_cap_comma) )
 
 # ---- glibc: a runtime floor, so too old means genuinely unsupported ---------
 # Linking against a newer glibc than the NAS runs produces binaries that will not
@@ -52,7 +59,7 @@ _tc_cap_join    = $(if $(strip $(TC_CAPABILITY_UNSUPPORTED)),$(_tc_cap_comma) )
 ifneq ($(strip $(MIN_GLIBC_VERSION)),)
 ifneq ($(strip $(TC_GLIBC)),)
 ifeq ($(call version_ge,$(TC_GLIBC),$(MIN_GLIBC_VERSION)),)
-TC_CAPABILITY_UNSUPPORTED := $(TC_CAPABILITY_UNSUPPORTED)$(_tc_cap_join)glibc $(TC_GLIBC) < $(MIN_GLIBC_VERSION) (a runtime floor: no toolchain can lift it)
+TC_CAPABILITY_UNSUPPORTED := $(call comma_append,$(TC_CAPABILITY_UNSUPPORTED),glibc $(TC_GLIBC) < $(MIN_GLIBC_VERSION) (a runtime floor: no toolchain can lift it))
 endif
 endif
 endif
@@ -62,8 +69,31 @@ endif
 ifneq ($(strip $(MIN_GCC_VERSION)),)
 ifneq ($(strip $(TC_GCC)),)
 ifeq ($(call version_ge,$(TC_GCC),$(MIN_GCC_VERSION)),)
-TC_CAPABILITY_UNSUPPORTED := $(TC_CAPABILITY_UNSUPPORTED)$(_tc_cap_join)gcc $(TC_GCC) < $(MIN_GCC_VERSION)
+TC_CAPABILITY_UNSUPPORTED := $(call comma_append,$(TC_CAPABILITY_UNSUPPORTED),gcc $(TC_GCC) < $(MIN_GCC_VERSION))
 endif
+endif
+endif
+
+# ---- rustc: the rust version the toolchain pins -----------------------------
+# Custom-rust archs (qoriq/ppc853x/88f6281/x86-5.2) are pinned to the rust version their
+# overlay ships (1.82.0, the last supporting their old glibc), read from the rust consumer's
+# PKG_VERS; a toolchain still pinning TC_RUSTC itself is honored too.
+_TC_CAP_RUST_MK := $(firstword $(wildcard $(BASEDIR)/toolchain/syno-$(ARCH)-$(TCVERSION)_rust-*/Makefile))
+ifneq ($(strip $(_TC_CAP_RUST_MK)),)
+_TC_CAP_RUSTC := $(shell sed -n 's/^PKG_VERS *= *//p' $(_TC_CAP_RUST_MK) 2>/dev/null)
+else
+_TC_CAP_RUSTC := $(shell sed -n 's/^TC_RUSTC *= *//p' $(_TC_CAP_MK) 2>/dev/null)
+endif
+
+# Published beside TC_GCC/TC_GLIBC/TC_KERNEL, and never empty: only an ACTIVE overlay pins a
+# version, otherwise the arch really does build on rustup 'stable' -- which sorts above every
+# number, so it clears any floor without a network query.
+# ?=, so spksrc.toolchain.mk keeps the last word inside a toolchain dir.
+TC_RUSTC ?= $(if $(OVERLAY_RUSTC_ON),$(_TC_CAP_RUSTC),stable)
+
+ifneq ($(strip $(MIN_RUSTC_VERSION)),)
+ifeq ($(call version_ge,$(TC_RUSTC),$(MIN_RUSTC_VERSION)),)
+TC_CAPABILITY_UNSUPPORTED := $(call comma_append,$(TC_CAPABILITY_UNSUPPORTED),rustc $(TC_RUSTC) < $(MIN_RUSTC_VERSION))
 endif
 endif
 
@@ -76,7 +106,7 @@ endif
 ifeq ($(strip $(REQUIRE_64BIT)),1)
 ifneq ($(strip $(ARCH)),)
 ifeq (,$(findstring $(ARCH),$(64bit_ARCHS)))
-TC_CAPABILITY_UNSUPPORTED := $(TC_CAPABILITY_UNSUPPORTED)$(_tc_cap_join)requires a 64-bit architecture
+TC_CAPABILITY_UNSUPPORTED := $(call comma_append,$(TC_CAPABILITY_UNSUPPORTED),requires a 64-bit architecture)
 endif
 endif
 endif

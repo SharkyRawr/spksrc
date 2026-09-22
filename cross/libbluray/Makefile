@@ -3,6 +3,9 @@ PKG_VERS = 1.4.1
 PKG_EXT = tar.xz
 PKG_DIST_NAME = $(PKG_NAME)-$(PKG_VERS).$(PKG_EXT)
 PKG_DIST_SITE = http://ftp.videolan.org/pub/videolan/libbluray/$(PKG_VERS)
+# Fallback: official VideoLAN mirror (verified byte-identical),
+# used when ftp.videolan.org is unreachable.
+PKG_DIST_MIRRORS = https://ftp.osuosl.org/pub/videolan/libbluray/$(PKG_VERS)
 PKG_DIR = $(PKG_NAME)-$(PKG_VERS)
 
 DEPENDS = cross/libxml2 cross/freetype cross/fontconfig
@@ -16,7 +19,7 @@ CONFIGURE_ARGS += -Denable_examples=false
 CONFIGURE_ARGS += -Dbdj_jar=disabled
 
 # For ppc853x-5.2, define GNU_SOURCE
-ifeq ($(findstring $(ARCH)-$(TCVERSION), ppc853x-5.2 qoriq-5.2),$(ARCH)-$(TCVERSION))
+ifeq ($(findstring $(ARCH)-$(TCVERSION), ppc853x-5.2),$(ARCH)-$(TCVERSION))
 ADDITIONAL_CFLAGS = -D_GNU_SOURCE
 endif
 

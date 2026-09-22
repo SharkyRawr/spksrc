@@ -1,6 +1,6 @@
 SPK_NAME = synocli-file
-SPK_VERS = 4.0.2
-SPK_REV = 29
+SPK_VERS = 4.0.3
+SPK_REV = 32
 SPK_ICON = src/synocli-file.png
 
 # cross/libblkid must be built before cross/e2fsprogs or cross/libext2fs
@@ -17,7 +17,7 @@ DEPENDS += cross/pixz
 DEPENDS += cross/pigz
 DEPENDS += cross/mg
 DEPENDS += cross/jupp
-DEPENDS += cross/iconv
+DEPENDS += cross/libiconv
 DEPENDS += cross/dos2unix
 DEPENDS += cross/patch
 DEPENDS += cross/rhash
@@ -28,17 +28,13 @@ OPTIONAL_DEPENDS += cross/micro
 OPTIONAL_DEPENDS += cross/fzf
 OPTIONAL_DEPENDS += cross/ripgrep
 OPTIONAL_DEPENDS += cross/fd
-OPTIONAL_DEPENDS += cross/sd
 OPTIONAL_DEPENDS += cross/bat
-OPTIONAL_DEPENDS += cross/eza
 OPTIONAL_DEPENDS += cross/nnn
-OPTIONAL_DEPENDS += cross/lsd
+OPTIONAL_DEPENDS += cross/ms-edit
 OPTIONAL_DEPENDS += cross/xstow
 
 MAINTAINER = hgy59
 DISPLAY_NAME = SynoCli File Tools
-
-POST_STRIP_TARGET = synocli-file_extra_install
 
 OPTIONAL_DESC =
 
@@ -59,30 +55,42 @@ DEPENDS += cross/micro cross/fzf
 OPTIONAL_DESC := $(OPTIONAL_DESC)", micro (editor), fzf (fuzzy finder)"
 endif
 
-# OLD_PPC archs are not supported with rust
-ifneq ($(findstring $(ARCH),$(OLD_PPC_ARCHS)),$(ARCH))
-DEPENDS += cross/bat
-OPTIONAL_DESC := $(OPTIONAL_DESC)", bat"
-
+# Rust tools, each gated like the cross package it pulls so the request cannot outrun
+# what will be accepted. eza, lsd and sd need no gate at all: their only blocker was std's
+# pthread_setname_np, which this PR weak-links, so they now build on ppc853x too.
 DEPENDS += cross/eza
 OPTIONAL_DESC := $(OPTIONAL_DESC)", eza"
-
-DEPENDS += cross/ripgrep
-OPTIONAL_DESC := $(OPTIONAL_DESC)", rg (ripgrep)"
-
-ifneq ($(findstring $(ARCH),$(ARMv5_ARCHS) $(ARMv7L_ARCHS)),$(ARCH))
-DEPENDS += cross/fd
-OPTIONAL_DESC := $(OPTIONAL_DESC)", fd (fd-find)"
-endif
 
 DEPENDS += cross/sd
 OPTIONAL_DESC := $(OPTIONAL_DESC)", sd (sed alternative)"
 
 DEPENDS += cross/lsd
 OPTIONAL_DESC := $(OPTIONAL_DESC)", lsd"
+
+
+# bat and fd reach pipe2 through a dependency crate, which std's weak link does not cover
+ifeq ($(call version_ge,$(TC_GLIBC),2.9),1)
+DEPENDS += cross/bat
+OPTIONAL_DESC := $(OPTIONAL_DESC)", bat"
+
+DEPENDS += cross/fd
+OPTIONAL_DESC := $(OPTIONAL_DESC)", fd (fd-find)"
 endif
 
-ifneq ($(findstring $(ARCH),$(ARMv5_ARCHS) $(OLD_PPC_ARCHS)),$(ARCH))
+# ripgrep 14 is the PPC fallback and its pcre2 wants -std=c11/c99
+ifeq ($(call version_ge,$(TC_GCC),4.6),1)
+DEPENDS += cross/ripgrep
+OPTIONAL_DESC := $(OPTIONAL_DESC)", rg (ripgrep)"
+endif
+
+# Rust Edition 2024 required
+ifeq ($(call version_ge,$(TC_RUSTC),1.85),1)
+DEPENDS += cross/ms-edit
+OPTIONAL_DESC := $(OPTIONAL_DESC)", edit (MS Editor)"
+endif
+
+ifeq ($(call version_ge, $(TC_GCC), 4.8.1),1)
+# A compiler with support for C++11 language features is required.
 DEPENDS += cross/xstow
 OPTIONAL_DESC := $(OPTIONAL_DESC)", xstow"
 endif
@@ -91,7 +99,11 @@ endif
 PCRE2_CLI_FULL = 1
 export PCRE2_CLI_FULL
 
-DOCS_URL = "\<a target=\"_blank\" href=\"https://docs.synocommunity.com/packages/synocli-file/\"\>SynoCli File Tools\</a\>"
+
+HOMEPAGE = https://docs.synocommunity.com/packages/synocli-file/
+LICENSE = Each tool is licensed under it's respective license.
+
+DOCS_URL = "\<a target=\"_blank\" href=\"$(HOMEPAGE)\"\>SynoCli File Tools\</a\>"
 
 # Remarks: html in DESCRIPTION is not supported
 DESCRIPTION = "SynoCli File Tools provide a set of small command-line utilities: \
@@ -106,22 +118,17 @@ DESCRIPTION = "SynoCli File Tools provide a set of small command-line utilities:
     patch$(OPTIONAL_DESC)."
 STARTABLE = no
 
-CHANGELOG  = "1. Add pigz. <br/>"
-CHANGELOG += "2. Update bat from v0.25.0 to v0.26.1 (except for ARMv5, qoriq and evansport on DSM < 7). <br/>"
-CHANGELOG += "3. Update dos2unix from v7.5.2 to v7.5.3. <br/>"
-CHANGELOG += "4. Update fzf from v0.66.0 to v0.67.0. <br/>"
-CHANGELOG += "5. Update less from v679 to v685. <br/>"
-CHANGELOG += "6. Update lsd from v1.1.5 to v1.2.0 (except for ARMv5). <br/>"
-CHANGELOG += "7. Update nano from v8.6 to v8.7. <br/>"
-CHANGELOG += "8. Update ripgrep from v14.1.1 to v15.1.0 (except for ARMv5 and qoriq). <br/>"
+CHANGELOG  = "1. Add extra encodings to iconv. <br/>"
+CHANGELOG += "2. Update pcre2 from v10.46 to v10.48. <br/>"
+CHANGELOG += "3. Update fd from v10.4.2 to v10.5.0; brings fd back to NVR and VS models (ARMv7L). <br/>"
+CHANGELOG += "4. Update fzf from v0.74.2 to v0.74.3. <br/>"
+CHANGELOG += "5. Update jdupes from v1.31.1 to v1.31.2. <br/>"
 CHANGELOG += "<br/>For package details and specific licences see $(DOCS_URL)".
 
 SERVICE_SETUP = src/service-setup.sh
 
-HOMEPAGE = https://docs.synocommunity.com/packages/synocli-file/
-LICENSE  = Each tool is licensed under it's respective license.
-
-SPK_COMMANDS  = bin/less bin/lessecho bin/lesskey
+SPK_COMMANDS  = bin/less bin/lesskey
+SPK_USR_LOCAL_LINKS = bin:libexec/lessecho
 SPK_COMMANDS += bin/tree
 SPK_COMMANDS += bin/jdupes
 SPK_COMMANDS += bin/mc bin/mcdiff bin/mcview bin/mcedit
@@ -144,6 +151,7 @@ SPK_COMMANDS += bin/mg
 SPK_COMMANDS += bin/bat
 SPK_COMMANDS += bin/eza
 SPK_COMMANDS += bin/lsd
+SPK_COMMANDS += bin/edit
 SPK_COMMANDS += bin/jmacs bin/joe bin/jpico bin/jstar bin/jupp bin/rjoe
 SPK_COMMANDS += bin/nnn
 SPK_COMMANDS += bin/iconv
@@ -173,8 +181,3 @@ DEPENDS += cross/rnm
 OPTIONAL_DESC := $(OPTIONAL_DESC)", rnm"
 SPK_COMMANDS += bin/rnm
 endif
-
-.PHONY: synocli-file_extra_install
-synocli-file_extra_install:
-	@$(MSG) "Set library runpath in rhash executable."
-	@patchelf --set-rpath /var/packages/$(SPK_NAME)/target/lib $(STAGING_DIR)/bin/rhash

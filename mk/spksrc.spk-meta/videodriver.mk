@@ -5,7 +5,17 @@
 # archs when VIDEODRV_PACKAGE is set.
 ###############################################################################
 
-IS_VIDEODRV_SUPPORTED := $(findstring $(ARCH),$(x64_ARCHS) $(ARMv8_ARCHS))
+# spk/synocli-videodriver declares REQUIRED_MIN_DSM = 6; ask for the same here.
+# x64_ARCHS contains the 5.2 archs (x86, x64) too, so the arch test alone made every
+# consumer -- ffmpeg6 among them -- pull the meta in at spk-stage1 on DSM 5.2, where
+# building it can only stop at "DSM Toolchain 5.2 is lower than 6".
+IS_VIDEODRV_SUPPORTED := $(if $(call version_ge,$(TCVERSION),6),$(findstring $(ARCH),$(x64_ARCHS) $(ARMv8_ARCHS)))
+
+# Same answer as an unsupported arch when the meta is left out: no META_DEPENDS, no
+# spk/synocli-videodriver in BUILD_DEPENDS, no tools package in SPK_DEPENDS.
+ifeq ($(VIDEODRV_ON),)
+IS_VIDEODRV_SUPPORTED :=
+endif
 
 ifneq ($(IS_VIDEODRV_SUPPORTED),)
 

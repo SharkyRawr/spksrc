@@ -82,7 +82,7 @@
 #
 # Notes:
 #  - The kernel build is idempotent when guarded by cookies.
-#  - Logging is centralized via LOG_WRAPPED.
+#  - Logging is centralized via RUNLOG.
 #  - cross-env.mk consumes tc_vars* generated during Stage1.
 #  - Kernel source relocation is handled by kernel_post_extract_target.
 #
@@ -222,8 +222,8 @@ kernel-stage1: $(TCVARS_DONE)
 
 ifneq ($(strip $(TC)),)
 $(TCVARS_DONE):
-	@$(MAKE) WORK_DIR=$(TC_WORK_DIR) --no-print-directory -C ../../toolchain/$(TC) toolchain
-	@$(MAKE) WORK_DIR=$(WORK_DIR) --no-print-directory -C ../../toolchain/$(TC) tcvars
+	@$(MAKE) WORK_DIR=$(TC_WORK_DIR) $(FWRD_ARGS) --no-print-directory -C ../../toolchain/$(TC) toolchain
+	@$(MAKE) WORK_DIR=$(WORK_DIR) $(FWRD_ARGS) --no-print-directory -C ../../toolchain/$(TC) tcvars
 else
 $(TCVARS_DONE): ;
 endif
@@ -242,8 +242,8 @@ kernel-stage2: install plist
 .PHONY: all
 all:
 	@mkdir -p $(WORK_DIR)
-	$(call LOG_WRAPPED,kernel-stage1)
-	$(call LOG_WRAPPED,kernel-stage2)
+	$(call RUNLOG,kernel-stage1)
+	$(call RUNLOG,kernel-stage2)
 
 ####
 

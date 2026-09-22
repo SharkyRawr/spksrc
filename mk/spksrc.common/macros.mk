@@ -19,7 +19,7 @@
 #  dedup-files : removes duplicate files while preserving order (via md5sum)
 #  merge       : merges environment variable values from input
 #
-# LOG_WRAPPED  : generic macro to call recipe execution using logging
+# RUNLOG  : generic macro to call recipe execution using logging
 #
 # Notes:
 #  - Version comparisons rely on GNU sort (-V)
@@ -32,6 +32,36 @@ version_le = $(shell if printf '%s\n' "$(1)" "$(2)" | sort -VC ; then echo 1; fi
 version_ge = $(shell if printf '%s\n' "$(1)" "$(2)" | sort -VCr ; then echo 1; fi)
 version_lt = $(shell if [ "$(1)" != "$(2)" ] && printf "%s\n" "$(1)" "$(2)" | sort -VC ; then echo 1; fi)
 version_gt = $(shell if [ "$(1)" != "$(2)" ] && printf "%s\n" "$(1)" "$(2)" | sort -VCr ; then echo 1; fi)
+
+# Append $(2) to the comma-separated list $(1), or return $(1) when there is nothing to add.
+# Reasons accumulate rather than overwrite: an arch can miss several capabilities at once.
+comma_append = $(if $(strip $(2)),$(1)$(if $(strip $(1)),$(,) )$(2),$(1))
+
+# Macro: locate a toolchain tool
+#
+#   $(call tc,gcc)   $(call tc,ar)   $(call tc,g++)
+#
+# Absolute path of a cross tool, honouring whichever overlay provides it. A package must
+# not build that path itself: an overlay lives somewhere else entirely
+# (<consumer>/work/install/usr/local/bin against the toolchain's <work>/<target>/bin) and
+# the gcc family carries a version suffix there, so $(TC_PATH)$(TC_PREFIX)gcc silently
+# resolves to the vendor compiler whenever an overlay is active.
+#
+# Falls back to TC_PATH, so the call is correct with no overlay and stays correct when one
+# is grafted on -- nothing to revisit in the packages. TC_OVERLAY_<c>_PATH is empty unless
+# that overlay is ACTIVE (spksrc.toolchain/tc_vars.mk).
+#
+# Needed by any build system that ignores CC/AR from the environment: ffmpeg takes its
+# compilers from --cross-prefix, and a handful of packages pass CC=/AR= on a make line.
+_tc_gcc_tools      = gcc g++ c++ cpp gfortran
+_tc_binutils_tools = ld as ar nm ranlib strip objdump objcopy readelf
+
+tc = $(strip \
+  $(if $(filter $(1),$(_tc_gcc_tools)),\
+    $(or $(TC_OVERLAY_GCC_PATH),$(TC_PATH))$(TC_PREFIX)$(1)$(TC_GCC_SUFFIX),\
+  $(if $(filter $(1),$(_tc_binutils_tools)),\
+    $(or $(TC_OVERLAY_BINUTILS_PATH),$(TC_PATH))$(TC_PREFIX)$(1),\
+    $(TC_PATH)$(TC_PREFIX)$(1))))
 
 # Remove duplicate words within string while preserving order
 define uniq
@@ -101,16 +131,28 @@ merge = $(shell /bin/bash -c '\
 ')
 
 # Generic macro to call recipe execution using logging
-define LOG_WRAPPED
-@bash -o pipefail -c '\
-    if [ -z "$$LOGGING_ENABLED" ]; then \
-        export LOGGING_ENABLED=1 ; \
-        script -q -e -c "$(MAKE) -f $(firstword $(MAKEFILE_LIST)) $(1)" /dev/null \
-            | tee >(sed -r "s/\x1B\[[0-9;]*[mK]//g; s/\\r//g" >> "$(DEFAULT_LOG)") ; \
-    else \
-        $(MAKE) -f $(firstword $(MAKEFILE_LIST)) $(1) ; \
-    fi \
-' || { \
+# Run $(1) under script(1) and tee everything into $(2), as a SHELL FRAGMENT usable
+# inside a larger recipe line -- unlike RUNLOG it neither prefixes @ nor exits on
+# failure, so the caller keeps its own status handling.
+#
+# script gives the command a pty, so its stdout AND stderr are teed: that is what puts a
+# parse-time $(error), and make's own "*** ... Stop.", in the log. Setting LOGGING_ENABLED
+# for the child makes this the only teeing level, so the inner RUNLOG stages take
+# their pass-through branch and nothing is written twice.
+define _runlog
+if [ -z "$$LOGGING_ENABLED" ]; then \
+    LOGGING_ENABLED=1 script -q -e -c "$(1)" /dev/null \
+        | tee >(sed -r "s/\x1B\[[0-9;]*[mK]//g; s/\r//g" >> "$(2)") ; \
+else \
+    $(1) ; \
+fi
+endef
+
+# The goal-shaped facade over _runlog: builds the make command itself, writes to
+# DEFAULT_LOG, and reports the failure. bash -o pipefail rather than `set -o pipefail`
+# because these call sites keep the default /bin/sh -e as their SHELL.
+define RUNLOG
+@bash -o pipefail -c '$(call _runlog,$(MAKE) -f $(firstword $(MAKEFILE_LIST)) $(1),$(DEFAULT_LOG))' || { \
     $(MSG) $$(printf "%s MAKELEVEL: %02d, PARALLEL_MAKE: %s, ARCH: %s, NAME: %s - FAILED\n" \
         "$$(date +%Y%m%d-%H%M%S)" $(MAKELEVEL) "$(PARALLEL_MAKE)" "$(ARCH)-$(TCVERSION)" "$(1)") \
         | tee --append $(STATUS_LOG) ; \

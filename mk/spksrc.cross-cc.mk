@@ -34,7 +34,7 @@
 # Notes:
 #   - This file is the canonical entry point for cross builds.
 #   - cross-env.mk consumes tc_vars* generated during Stage1.
-#   - Logging is centralized via LOG_WRAPPED for consistent output.
+#   - Logging is centralized via RUNLOG for consistent output.
 #
 ###############################################################################
 # Cross-compilation orchestration overview
@@ -135,8 +135,10 @@ cross-stage1: $(TCVARS_DONE) $(TKVARS_DONE)
 
 ifneq ($(strip $(TC)),)
 $(TCVARS_DONE):
-	@$(MAKE) WORK_DIR=$(TC_WORK_DIR) --no-print-directory -C ../../toolchain/$(TC) toolchain
-	@$(MAKE) WORK_DIR=$(WORK_DIR) --no-print-directory -C ../../toolchain/$(TC) tcvars
+	@$(MAKE) WORK_DIR=$(TC_WORK_DIR) $(FWRD_ARGS) --no-print-directory -C ../../toolchain/$(TC) toolchain
+	@# The selectors decide something here and not above: the toolchain build is shared and
+	@# cookie-locked, so tcvars is where a package's own overlay choice can still show.
+	@$(MAKE) WORK_DIR=$(WORK_DIR) $(FWRD_ARGS) --no-print-directory -C ../../toolchain/$(TC) tcvars
 else
 $(TCVARS_DONE): ;
 endif
@@ -144,8 +146,8 @@ endif
 # $(TK) is only being set if REQUIRE_TOOLKIT=1
 ifneq ($(strip $(TK)),)
 $(TKVARS_DONE):
-	@$(MAKE) WORK_DIR=$(TK_WORK_DIR) --no-print-directory -C ../../toolkit/$(TK) toolkit
-	@$(MAKE) WORK_DIR=$(WORK_DIR) --no-print-directory -C ../../toolkit/$(TK) tkvars
+	@$(MAKE) WORK_DIR=$(TK_WORK_DIR) $(FWRD_ARGS) --no-print-directory -C ../../toolkit/$(TK) toolkit
+	@$(MAKE) WORK_DIR=$(WORK_DIR) $(FWRD_ARGS) --no-print-directory -C ../../toolkit/$(TK) tkvars
 else
 $(TKVARS_DONE): ;
 endif
@@ -164,8 +166,8 @@ cross-stage2: install plist
 .PHONY: all
 all:
 	@mkdir -p $(WORK_DIR)
-	$(call LOG_WRAPPED,cross-stage1)
-	$(call LOG_WRAPPED,cross-stage2)
+	$(call RUNLOG,cross-stage1)
+	$(call RUNLOG,cross-stage2)
 
 ####
 
